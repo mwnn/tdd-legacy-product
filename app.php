@@ -1,24 +1,9 @@
 <?php
 
-/*
- * TODO:
- * - refactor the class to be able to test the public methods
- * - write the tests with an sqlite database, but do not touch the production database!
- * - find the bug in the class with your tests and fix it!
- * - check the class characteristic and introduce an exception if it would be a better practice
- * - check if the class have code duplication, and refactor it
+/**
+ * my app
  */
 
-/*
--- schema
-
-CREATE TABLE product (
-    id INTEGER PRIMARY KEY,
-    ean varchar(64) default '',
-    name text default ''
-);
-
-*/
 define('PRODUCTION_DATABASE_FILE', './product.db');
 
 require_once("ProductDao.php");
@@ -42,7 +27,13 @@ try {
     $result = ProductDao::create($product);
     var_export($result);
 
-//    $result = ProductDao::getByEan('1234');
+//    $productToUpdate = ProductDao::getByEan('878789');
+//    $productToUpdate->name = 'Updated product turkey';
+//    $productToUpdate->ean = '9999';
+//    $result = ProductDao::modify($productToUpdate);
+//    var_export($result); 
+//
+//    $result = ProductDao::getByEan('9999');
 //    var_export($result);
 //
 //    $result = ProductDao::getById(9);
