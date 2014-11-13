@@ -3,42 +3,79 @@
 /**
  * Class ProductDao
  */
-class ProductDao {
-
+class ProductDao
+{
     /**
      * @var \PDO Database resource.
      */
-    private static $pdo;
+    private $pdo;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param PDO $pdo
+	 */
+	public function __construct(PDO $pdo)
+	{
+		$this->pdo = $pdo;
+	}
+
+	/**
+	 * @param $query
+	 * @param $data
+	 * @return PDOStatement
+	 * @throw PDOException
+	 */
+	private function exec($query, $data)
+	{
+		$status = null;
+		$sth    = $this->getPdo()->prepare($query);
+
+		if (false === $sth->execute($data))
+		{
+			throw new PDOException(sprintf("Failed to execute command. ErrorMessage: %s, ErrorCode: %d", $sth->errorInfo(), $sth->errorCode()));
+		}
+
+		return $sth;
+	}
+
+	/**
+	 * Get product by field.
+	 *
+	 * @return NullProduct|Product
+	 * @throw PDOException
+	 */
+	public function getByField($name, $value)
+	{
+		$product = new NullProduct;
+
+		$query   = sprintf("SELECT * FROM product WHERE %s = :%s", $name, $name);
+		$data    = array(":$name" => $value);
+
+		$sth     = $this->exec($query, $data);
+
+		$rows = $sth->fetchAll();
+
+		if (count($rows) > 0)
+		{
+			$row = $rows[0];
+			$product = new Product($row['ean'], $row['name']);
+			$product->id = $row['id'];
+		}
+
+		return $product;
+	}
 
     /**
      * Get product by EAN.
      *
      * @param $ean
      * @return NullProduct|Product
+	 * @throw PDOException
      */
-    public static function getByEan($ean)
+    public function getByEan($ean)
     {
-	$sth = self::getPdo()->prepare("SELECT * FROM product WHERE ean = :ean");
-	$sth->execute(
-	    array(
-		':ean' => $ean,
-	    )
-	);
-
-	$rows = $sth->fetchAll();
-	if (count($rows) > 0)
-	{
-	    $row = $rows[0];
-
-	    $product = new Product;
-	    $product->id = $row['id'];
-	    $product->name = $row['name'];
-	    $product->ean = $row['ean'];
-
-	    return $product;
-	}
-
-	return new NullProduct;
+		return $this->getByField('ean', $ean);
     }
 
     /**
@@ -46,30 +83,11 @@ class ProductDao {
      *
      * @param $id
      * @return NullProduct|Product
+	 * @throw PDOException
      */
-    public static function getById($id)
+    public function getById($id)
     {
-	$sth = self::getPdo()->prepare("SELECT * FROM product WHERE id = :id");
-	$sth->execute(
-	    array(
-		':id' => $id,
-	    )
-	);
-
-	$rows = $sth->fetchAll();
-	if (count($rows) > 0)
-	{
-	    $row = $rows[0];
-
-	    $product = new Product;
-	    $product->id = $row['id'];
-	    $product->name = $row['name'];
-	    $product->ean = $row['ean'];
-
-	    return $product;
-	}
-
-	return new NullProduct;
+		return $this->getByField('id', $id);
     }
 
     /**
@@ -77,30 +95,23 @@ class ProductDao {
      *
      * @param Product $product
      * @return bool
+	 * @throw PDOException
      */
-    public static function create(Product $product)
-    {
-	if (self::checkUnique($product->ean))
+    public function create(Product $product)
 	{
-	    $sth = self::getPdo()->prepare("
-		INSERT INTO product
-		    (ean, name)
-		VALUES
-		    (:ean, :name)
-	    ");
+		$result = false;
 
-	    $sth->execute(
-		array(
-		    ':ean' => $product->ean,
-		    ':name' => $product->name,
-		)
-	    );
-	    return true;
-	}
-	else
-	{
-	    return false;
-	}
+		if ($this->checkUnique($product->ean))
+		{
+			$sth = $this->exec("INSERT INTO product (ean, name) VALUES (:ean, :name)", array(
+				':ean' => $product->ean,
+				':name' => $product->name,
+			));
+
+			$result = true;
+		}
+
+		return $result;
     }
 
     /**
@@ -108,48 +119,41 @@ class ProductDao {
      * It checks if the EAN already exists by another product, and does not overwrite.
      *
      * @param Product $product
-     * @return bool
+     * @return int|null
      */
-    public static function modify(Product $product)
+    public function modify(Product $product)
     {
-	if (self::checkUnique($product->ean))
-	{
-	    $sth = self::getPdo()->prepare("
-		UPDATE product
-		SET
-		    ean = :ean,
-		    name = :name
-		WHERE id = :id
-	    ");
+		$sth = $this->exec("UPDATE product SET ean = :ean, name = :name WHERE id = :id ", array(
+			':id'   => $product->id,
+			':ean'  => $product->ean,
+			':name' => $product->name,
+		));
 
-	    $sth->execute(
-		array(
-		    ':id' => $product->id,
-		    ':ean' => $product->ean,
-		    ':name' => $product->name,
-		)
-	    );
-	}
-	return true;
+		$result = $sth->rowCount() ? true : false;
+
+		return $result;
     }
 
     /**
      * Delete product from database
      *
      * @param Product $product
-     * @return bool
+     * @return null|int
      */
-    public static function delete(Product $product)
+    public function delete(Product $product)
     {
-	$sth = self::getPdo()->prepare("DELETE FROM product WHERE id = :id");
+		$result = null;
 
-	$sth->execute(
-	    array(
-		':id' => $product->id,
-	    )
-	);
+		$sth = $this->exec("DELETE FROM product WHERE id = :id", array(
+			':id' => $product->id,
+		));
 
-	return true;
+		if ($sth instanceof PDOStatement)
+		{
+			$result = $sth->rowCount();
+		}
+
+		return $result;
     }
 
     /**
@@ -157,16 +161,17 @@ class ProductDao {
      *
      * @return PDO
      */
-    private static function getPdo()
+    private function getPdo()
     {
-	if (!(self::$pdo !== null && self::$pdo instanceof \PDO))
-	{
-	    $dsn = sprintf("sqlite:%s", PRODUCTION_DATABASE_FILE);
-	    self::$pdo = new PDO($dsn);
-	    self::$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+/*		if (!($this->pdo !== null && $this->pdo instanceof \PDO))
+		{
+			$dsn = sprintf("sqlite:%s", PRODUCTION_DATABASE_FILE);
+			$this->$pdo = new PDO($dsn);
+			$this->$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+		}
+//*/
+		return $this->pdo;
 	}
-	return self::$pdo;
-    }
 
     /**
      * Check if the product will be unique by EAN
@@ -174,20 +179,21 @@ class ProductDao {
      * @param $ean
      * @return bool
      */
-    private static function checkUnique($ean)
+    private function checkUnique($ean)
     {
-	$sth = self::getPdo()->prepare("SELECT COUNT(1) FROM product WHERE ean = :ean");
-	$sth->execute(
-	    array(
-		':ean' => $ean,
-	    )
-	);
+		$result = true;
 
-	$countRow = $sth->fetch();
-	if ($countRow[0] > 0)
-	{
-	    return false;
-	}
-	return true;
+		$sth = $this->exec("SELECT COUNT(1) FROM product WHERE ean = :ean", array(
+			':ean' => $ean,
+		));
+
+		$countRow = $sth->fetch();
+
+		if ((int)$countRow[0] > 0)
+		{
+			$result = false;
+		}
+
+		return $result;
     }
 }

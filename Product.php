@@ -19,6 +19,21 @@ class Product
      * @var string
      */
     public $name;
+
+    /**
+     * @param string $ean
+     * @param string $name
+     */
+    public function __construct($ean='', $name='')
+    {
+        if ($ean !== '' && $name !== '')
+        {
+            $this->id   = $ean;
+            $this->ean  = $ean;
+            $this->name = $name;
+        }
+    }
+
 }
 
 /**
